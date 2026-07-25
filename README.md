@@ -1,6 +1,5 @@
-# AbyssSplat
+# **AbyssSplat: Active-Illumination-Aware Gaussian Splatting for Deep-Sea 3D Reconstruction**
 
-**AbyssSplat: Active-Illumination-Aware Gaussian Splatting for Deep-Sea 3D Reconstruction**  
 ACM Multimedia 2026 (accepted)
 
 > Code release for the paper is being prepared. Paper and project-page links will be added after publication.
@@ -23,8 +22,8 @@ AbyssSplat is a 3D Gaussian Splatting framework for reconstructing underwater sc
 AbyssSplat requires Python 3.8, CUDA 11.8, PyTorch 2.1.2, and Nerfstudio 1.1.4.
 
 ```bash
-conda create -n abyss_splat python=3.8 -y
-conda activate abyss_splat
+conda create -n abysssplat python=3.8 -y
+conda activate abysssplat
 python -m pip install --upgrade pip
 
 # PyTorch and CUDA toolkit
@@ -38,8 +37,8 @@ pip install nerfstudio==1.1.4
 ns-install-cli
 
 # AbyssSplat
-git clone https://github.com/Adios-Cowboy/abysssplat.git
-cd abyssssplat
+git clone https://github.com/Adios-Cowboy/AbyssSplat.git
+cd AbyssSplat
 pip install --no-use-pep517 -e .
 ```
 
@@ -104,9 +103,9 @@ ns-render dataset \
 ## Repository layout
 
 ```text
-abyss_splat/                 # Python model, renderer wrappers, and CUDA extension
-  abyss_splat.py             # AbyssSplat model and densification logic
-  abyss_splat_config.py      # Nerfstudio method configuration
+abysssplat/                 # Python model, renderer wrappers, and CUDA extension
+  abysssplat.py             # AbyssSplat model and densification logic
+  abysssplat_config.py      # Nerfstudio method configuration
   cuda/csrc/                 # CUDA rasterizer and bundled GLM headers
 setup.py                     # CUDA extension build configuration
 pyproject.toml               # Package metadata and Nerfstudio entry point

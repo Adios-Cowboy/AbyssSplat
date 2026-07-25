@@ -3,7 +3,7 @@ import torch
 from .project_gaussians import project_gaussians
 from .rasterize import rasterize_gaussians
 from ._torch_impl import project_gaussians_forward, rasterize_gaussians_forward
-from .abyss_splat import AbyssSplatModel
+from .abysssplat import AbyssSplatModel
 from .utils import (
     map_gaussian_to_intersects,
     bin_and_sort_gaussians,

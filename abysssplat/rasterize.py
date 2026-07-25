@@ -7,7 +7,7 @@ from jaxtyping import Float, Int
 from torch import Tensor
 from torch.autograd import Function
 
-import abyss_splat.cuda as _C
+import abysssplat.cuda as _C
 from .utils import bin_and_sort_gaussians, compute_cumulative_intersects
 
 

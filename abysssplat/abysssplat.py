@@ -26,10 +26,10 @@ from typing import Dict, List, Optional, Tuple, Type, Union
 import numpy as np
 import torch
 import torch.nn as nn
-from abyss_splat._torch_impl import quat_to_rotmat
-from abyss_splat.project_gaussians import project_gaussians
-from abyss_splat.rasterize import rasterize_gaussians
-from abyss_splat.sh import num_sh_bases, spherical_harmonics
+from abysssplat._torch_impl import quat_to_rotmat
+from abysssplat.project_gaussians import project_gaussians
+from abysssplat.rasterize import rasterize_gaussians
+from abysssplat.sh import num_sh_bases, spherical_harmonics
 from torch.nn import Parameter
 from typing_extensions import Literal
 
@@ -117,7 +117,7 @@ class AbyssSplatModelConfig(ModelConfig):
     """Every this many refinement steps, reset the alpha"""
     abs_grad_densification: bool = True
     """If True, use absolute gradient for densification"""
-    densify_grad_thresh: float = 0.0004 ##xiugai
+    densify_grad_thresh: float = 0.0004
     # densify_grad_thresh: float = 0.0008
     """threshold of positional gradient norm for densifying gaussians (0.0004, 0.0008)"""
     densify_size_thresh: float = 0.001     ######################## 0.001
@@ -140,9 +140,9 @@ class AbyssSplatModelConfig(ModelConfig):
     """Number of gaussians to initialize if random init is used"""
     random_scale: float = 10.
     "Size of the cube to initialize random gaussians within"
-    ssim_lambda: float = 0.2  ##xiugai
+    ssim_lambda: float = 0.2
     """weight of ssim loss"""
-    main_loss: Literal["l1", "reg_l1", "reg_l2"] = "reg_l1"  ##xiugai
+    main_loss: Literal["l1", "reg_l1", "reg_l2"] = "reg_l1"
     """main loss to use"""
     ssim_loss: Literal["reg_ssim", "ssim"] = "reg_ssim"
     """ssim loss to use"""
@@ -160,7 +160,7 @@ class AbyssSplatModelConfig(ModelConfig):
     However, PLY exported with antialiased rasterize mode is not compatible with classic mode. Thus many web viewers that
     were implemented for classic mode can not render antialiased mode PLY properly without modifications.
     """
-    num_layers_medium: int = 2  ##xiugai
+    num_layers_medium: int = 2
     """Number of hidden layers for medium MLP."""
     hidden_dim_medium: int = 128
     """Dimension of hidden layers for medium MLP."""
@@ -198,7 +198,7 @@ class AbyssSplatModelConfig(ModelConfig):
     # """Every this many refinement steps, reset the alpha"""
     # abs_grad_densification: bool = True
     # """If True, use absolute gradient for densification"""
-    # densify_grad_thresh: float = 0.0004 ##xiugai
+    # densify_grad_thresh: float = 0.0004
     # # densify_grad_thresh: float = 0.0008
     # """threshold of positional gradient norm for densifying gaussians (0.0004, 0.0008)"""
     # densify_size_thresh: float = 0.0005
@@ -221,9 +221,9 @@ class AbyssSplatModelConfig(ModelConfig):
     # """Number of gaussians to initialize if random init is used"""
     # random_scale: float = 10.
     # "Size of the cube to initialize random gaussians within"
-    # ssim_lambda: float = 0.1  ##xiugai
+    # ssim_lambda: float = 0.1
     # """weight of ssim loss"""
-    # main_loss: Literal["l1", "reg_l1", "reg_l2"] = "reg_l1"  ##xiugai
+    # main_loss: Literal["l1", "reg_l1", "reg_l2"] = "reg_l1"
     # """main loss to use"""
     # ssim_loss: Literal["reg_ssim", "ssim"] = "reg_ssim"
     # """ssim loss to use"""
@@ -241,7 +241,7 @@ class AbyssSplatModelConfig(ModelConfig):
     # However, PLY exported with antialiased rasterize mode is not compatible with classic mode. Thus many web viewers that
     # were implemented for classic mode can not render antialiased mode PLY properly without modifications.
     # """
-    # num_layers_medium: int = 3  ##xiugai
+    # num_layers_medium: int = 3
     # """Number of hidden layers for medium MLP."""
     # hidden_dim_medium: int = 64
     # """Dimension of hidden layers for medium MLP."""
@@ -353,8 +353,6 @@ class AbyssSplatModel(Model):
         self.lpips = LearnedPerceptualImagePatchSimilarity(normalize=True)
 
         self.ssim_fn = MS_SSIM(data_range=1.0, size_average=True, channel=3, weights=[0.6, 0.3, 0.1])
-
-        # self.PerceptualLoss = PerceptualLoss() ###xiugai
         self.step = 0
         self.crop_box: Optional[OrientedBox] = None
         if self.config.background_color == "random":
@@ -520,7 +518,6 @@ class AbyssSplatModel(Model):
             else:
                 assert self.xys.grad is not None
                 grads = self.xys.grad.detach().norm(dim=-1)
-            # print(f"grad norm min {grads.min().item()} max {grads.max().item()} mean {grads.mean().item()} size {grads.shape}")
             if self.xys_grad_norm is None:
                 self.xys_grad_norm = grads
                 self.depths_accum = self.depths
@@ -570,7 +567,6 @@ class AbyssSplatModel(Model):
 
                 avg_grad_norm_raw = (self.xys_grad_norm / self.vis_counts) * 0.5 * max(self.last_size[0],
                                                                                        self.last_size[1])
-                # --- 新增：介质场参数显式引导致密化 --- tmp2
                 # 1. 仿射变换计算视图空间局部深度 z
                 P_cam = torch.matmul(self.last_viewmat[:3, :3], self.means.T).T + self.last_viewmat[:3, 3]
                 z = torch.clamp(P_cam[:, 2], min=0.0)  # 剔除负深度
@@ -584,12 +580,8 @@ class AbyssSplatModel(Model):
                     medium_base_out = self.medium_mlp(dirs_encoded)
                 else:
                     medium_base_out = self.medium_mlp(dirs_encoded.float())
-
-                #######tmp3
                 # 提取消光系数 (以 medium_attn 为例，取 RGB 通道均值)
                 beta_D = self.sigma_activation(medium_base_out[..., 6:9] + self.medium_density_bias).mean(dim=-1)
-
-                #v10 比9 11有效
                 sigma_gaussian = torch.sigmoid(self.opacities.detach()).squeeze()
                 T_z = torch.exp(-beta_D * z)
 
@@ -829,14 +821,12 @@ class AbyssSplatModel(Model):
             return 1
 
     def _downscale_if_required(self, image):
-        # print("use_downscale_if_required")
         d = self._get_downscale_factor()
         if d > 1:
             newsize = [image.shape[0] // d, image.shape[1] // d]
 
             # torchvision can be slow to import, so we do it lazily.
             import torchvision.transforms.functional as TF
-            # print(f"resizeto_{newsize}")
             return TF.resize(image.permute(2, 0, 1), newsize, antialias=None).permute(1, 2, 0)
         return image
 
@@ -869,8 +859,6 @@ class AbyssSplatModel(Model):
         viewmat = torch.eye(4, device=R.device, dtype=R.dtype)
         viewmat[:3, :3] = R_inv
         viewmat[:3, 3:4] = T_inv
-
-        # --- 新增：缓存当前视角的相机参数供致密化使用 --- ##tmp1
         self.last_viewmat = viewmat.detach()
         self.last_camera_center = T.detach().squeeze()
         # ----------------------------------------------
@@ -922,14 +910,12 @@ class AbyssSplatModel(Model):
             .view(*outputs_shape, -1)
             .to(directions)
         )
-        #新增的权重参数
+        # Effective active-light intensity.
         medium_omega = (
-            self.sigma_activation(medium_base_out[..., 9:12] + self.medium_density_bias)   ##xiugai
+            self.sigma_activation(medium_base_out[..., 9:12] + self.medium_density_bias)
             .view(*outputs_shape, -1)
             .to(directions)
         )
-
-        # print(torch.amax(medium_omega, dim=(0, 1)))
 
         if self.config.zero_medium:
             medium_rgb = torch.zeros_like(medium_rgb)
@@ -1145,12 +1131,7 @@ class AbyssSplatModel(Model):
         )
         # psnr_loss = (40.0 - self.psnr(gt_img.permute(2, 0, 1)[None, ...],
         #             pred_img.permute(2, 0, 1)[None, ...].clamp(0.0, 1.0),)) / 40.0
-        # perloss = self.PerceptualLoss(gt_img.permute(2, 0, 1)[None, ...], pred_img.permute(2, 0, 1)[None, ...])  ##xiugai
-        # print(f"pre:{perloss} ssim:{simloss} other:{recon_loss} total:{(1 - self.config.ssim_lambda) * recon_loss} + {self.config.ssim_lambda * simloss}")
         return {
-            # "main_loss": 0.8 * recon_loss + 0.1 * simloss + 0.1 * perloss, ##xiugai
-            # "main_loss": (1 - self.config.ssim_lambda) * recon_loss + self.config.ssim_lambda * simloss + 0.1 * perloss,
-            ##xiugai
             # "main_loss": 0.7 * recon_loss
             #              + 0.1 * simloss
             #                 + 0.2 * lpips_loss
@@ -1221,8 +1202,5 @@ class AbyssSplatModel(Model):
         # all of these metrics will be logged as scalars
         metrics_dict = {"psnr": float(psnr.item()), "ssim": float(ssim)}  # type: ignore
         metrics_dict["lpips"] = float(lpips)
-
-        print(f"高斯数量：{self.num_points}")
-
         images_dict = {"gt": output_gt_rgb, "rgb_medium": outputs["rgb_medium"], "rgb_object": outputs["rgb_object"], "depth": outputs["depth"], "rgb": outputs["rgb"], "rgb_clear": outputs["rgb_clear"]}
         return metrics_dict, images_dict

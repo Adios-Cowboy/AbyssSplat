@@ -1,1 +1,1 @@
-recursive-include abyss_splat/cuda/csrc *
+recursive-include abysssplat/cuda/csrc *

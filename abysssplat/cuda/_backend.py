@@ -33,7 +33,7 @@ def cuda_toolkit_version():
     return cuda_version
 
 
-name = "abyss_splat_cuda"
+name = "abysssplat_cuda"
 build_dir = _get_build_directory(name, verbose=False)
 extra_include_paths = [os.path.join(PATH, "csrc/third_party/glm")]
 extra_cflags = ["-O3"]
@@ -53,7 +53,7 @@ sources = list(glob.glob(os.path.join(PATH, "csrc/*.cu"))) + list(
 
 try:
     # try to import the compiled module (via setup.py)
-    from abyss_splat import csrc as _C
+    from abysssplat import csrc as _C
 except ImportError:
     # if failed, try with JIT compilation
     if cuda_toolkit_available():
@@ -65,7 +65,7 @@ except ImportError:
             pass
 
         with Console().status(
-            "[bold yellow]abyss_splat: Setting up CUDA (This may take a few minutes the first time)",
+            "[bold yellow]abysssplat: Setting up CUDA (This may take a few minutes the first time)",
             spinner="bouncingBall",
         ):
             _C = load(
@@ -77,7 +77,7 @@ except ImportError:
             )
     else:
         Console().print(
-            "[yellow]abyss_splat: No CUDA toolkit found. abyss_splat will be disabled.[/yellow]"
+            "[yellow]abysssplat: No CUDA toolkit found. abysssplat will be disabled.[/yellow]"
         )
 
 

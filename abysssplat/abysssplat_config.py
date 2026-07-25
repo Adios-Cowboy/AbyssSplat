@@ -9,7 +9,7 @@ from nerfstudio.engine.trainer import TrainerConfig
 from nerfstudio.pipelines.base_pipeline import VanillaPipelineConfig
 from nerfstudio.plugins.types import MethodSpecification
 
-from abyss_splat.abyss_splat import AbyssSplatModelConfig
+from abysssplat.abysssplat import AbyssSplatModelConfig
 
 
 NUM_STEPS = 15_000
@@ -25,7 +25,7 @@ def _exponential_optimizer(lr: float, lr_final: float) -> dict:
     }
 
 
-abyss_splat_method = MethodSpecification(
+abysssplat_method = MethodSpecification(
     config=TrainerConfig(
         method_name="abysssplat",
         steps_per_eval_image=1_000,

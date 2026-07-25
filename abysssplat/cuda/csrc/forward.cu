@@ -38,20 +38,15 @@ __global__ void project_gaussians_forward_kernel(
     num_tiles_hit[idx] = 0;
 
     float3 p_world = means3d[idx];
-    // printf("p_world %d %.2f %.2f %.2f\n", idx, p_world.x, p_world.y,
     // p_world.z);
     float3 p_view;
     if (clip_near_plane(p_world, viewmat, p_view, clip_thresh)) {
-        // printf("%d is out of frustum z %.2f, returning\n", idx, p_view.z);
         return;
     }
-    // printf("p_view %d %.2f %.2f %.2f\n", idx, p_view.x, p_view.y, p_view.z);
 
     // compute the projected covariance
     float3 scale = scales[idx];
     float4 quat = quats[idx];
-    // printf("%d scale %.2f %.2f %.2f\n", idx, scale.x, scale.y, scale.z);
-    // printf("%d quat %.2f %.2f %.2f %.2f\n", idx, quat.w, quat.x, quat.y,
     // quat.z);
     float *cur_cov3d = &(covs3d[6 * idx]);
     scale_rot_to_cov3d(scale, glob_scale, quat, cur_cov3d);
@@ -69,14 +64,12 @@ __global__ void project_gaussians_forward_kernel(
         p_world, cur_cov3d, viewmat, fx, fy, tan_fovx, tan_fovy,
         cov2d, comp
     );
-    // printf("cov2d %d, %.2f %.2f %.2f\n", idx, cov2d.x, cov2d.y, cov2d.z);
 
     float3 conic;
     float radius;
     bool ok = compute_cov2d_bounds(cov2d, conic, radius);
     if (!ok)
         return; // zero determinant
-    // printf("conic %d %.2f %.2f %.2f\n", idx, conic.x, conic.y, conic.z);
     conics[idx] = conic;
 
     // compute the projected mean
@@ -85,7 +78,6 @@ __global__ void project_gaussians_forward_kernel(
     get_tile_bbox(center, radius, tile_bounds, tile_min, tile_max, block_width);
     int32_t tile_area = (tile_max.x - tile_min.x) * (tile_max.y - tile_min.y);
     if (tile_area <= 0) {
-        // printf("%d point bbox outside of bounds\n", idx);
         return;
     }
 
@@ -94,7 +86,6 @@ __global__ void project_gaussians_forward_kernel(
     radii[idx] = (int)radius;
     xys[idx] = center;
     compensation[idx] = comp;
-    // printf(
     //     "point %d x %.2f y %.2f z %.2f, radius %d, # tiles %d, tile_min %d
     //     %d, tile_max %d %d\n", idx, center.x, center.y, depths[idx],
     //     radii[idx], tile_area, tile_min.x, tile_min.y, tile_max.x, tile_max.y
@@ -123,12 +114,10 @@ __global__ void map_gaussian_to_intersects(
     uint2 tile_min, tile_max;
     float2 center = xys[idx];
     get_tile_bbox(center, radii[idx], tile_bounds, tile_min, tile_max, block_width);
-    // printf("point %d, %d radius, min %d %d, max %d %d\n", idx, radii[idx],
     // tile_min.x, tile_min.y, tile_max.x, tile_max.y);
 
     // update the intersection info for all tiles this gaussian hits
     int32_t cur_idx = (idx == 0) ? 0 : cum_tiles_hit[idx - 1];
-    // printf("point %d starting at %d\n", idx, cur_idx);
     int64_t depth_id = (int64_t) * (int32_t *)&(depths[idx]);
     for (int i = tile_min.y; i < tile_max.y; ++i) {
         for (int j = tile_min.x; j < tile_max.x; ++j) {
@@ -139,7 +128,6 @@ __global__ void map_gaussian_to_intersects(
             ++cur_idx; // handles gaussians that hit more than one tile
         }
     }
-    // printf("point %d ending at %d\n", idx, cur_idx);
 }
 
 // kernel to map sorted intersection IDs to tile bins
@@ -488,7 +476,7 @@ __global__ void rasterize_forward(
             // Riemann midpoint calculation for active source
             float z_mid = 0.5f * (prev_depth + depth);
             float delta_z = depth - prev_depth;
-            float geom_atten = 1.0f / (z_mid * z_mid + 0.1); // 1e-6f is epsilon  //xiugai
+            float geom_atten = 1.0f / (z_mid * z_mid + 0.001f);
 
             float3 active_intensity;
             active_intensity.x = medium_omega_pix.x * geom_atten * __expf(-2.0f * medium_attn_pix.x * z_mid) * delta_z;
@@ -532,466 +520,6 @@ __global__ void rasterize_forward(
 }
 
 
-//----version2-----
-//__global__ void rasterize_forward(
-//    const dim3 tile_bounds,
-//    const dim3 img_size,
-//    const int32_t* __restrict__ gaussian_ids_sorted,
-//    const int2* __restrict__ tile_bins,
-//    const float2* __restrict__ xys,
-//    const float3* __restrict__ conics,
-//    const float3* __restrict__ colors,
-//    const float* __restrict__ opacities,
-//    const float3* __restrict__ medium_rgb,
-//    const float3* __restrict__ medium_bs,
-//    const float3* __restrict__ medium_attn,
-//    const float3* __restrict__ medium_omega,
-//    const float* __restrict__ depths,
-//    float* __restrict__ final_Ts,
-//    int* __restrict__ final_index,
-//    int* __restrict__ first_index,
-//    float3* __restrict__ out_img,
-//    float3* __restrict__ out_clr,
-//    float3* __restrict__ out_med,
-//    float* __restrict__ depth_im,
-//    const float3& __restrict__ background
-//) {
-//    auto block = cg::this_thread_block();
-//    int32_t tile_id =
-//        block.group_index().y * tile_bounds.x + block.group_index().x;
-//    unsigned i =
-//        block.group_index().y * block.group_dim().y + block.thread_index().y;
-//    unsigned j =
-//        block.group_index().x * block.group_dim().x + block.thread_index().x;
-//
-//    float px = (float)j;
-//    float py = (float)i;
-//    int32_t pix_id = i * img_size.x + j;
-//
-//    bool inside = (i < img_size.y && j < img_size.x);
-//    bool done = !inside;
-//
-//    int2 range = tile_bins[tile_id];
-//    const int block_size = block.size();
-//    int num_batches = (range.y - range.x + block_size - 1) / block_size;
-//
-//    __shared__ int32_t id_batch[MAX_BLOCK_SIZE];
-//    __shared__ float3 xy_opacity_batch[MAX_BLOCK_SIZE];
-//    __shared__ float3 conic_batch[MAX_BLOCK_SIZE];
-//    __shared__ float depth_batch[MAX_BLOCK_SIZE];
-//
-//    float T = 1.f;
-//    int cur_idx = 0;
-//    int first_idx = 0;
-//    float prev_depth = 0.f;
-//
-//    float3 medium_rgb_pix;
-//    float3 medium_bs_pix;
-//    float3 medium_attn_pix;
-//    float3 medium_omega_pix;
-//    float min_medium_attn_pix;
-//    if (inside) {
-//        medium_rgb_pix   = medium_rgb[pix_id];
-//        medium_bs_pix    = medium_bs[pix_id];
-//        medium_attn_pix  = medium_attn[pix_id];
-//        medium_omega_pix = medium_omega[pix_id];
-//        prev_depth = 0.f;
-//        min_medium_attn_pix = std::min(medium_attn_pix.x,
-//                              std::min(medium_attn_pix.y, medium_attn_pix.z));
-//        min_medium_attn_pix = std::min(0.f, min_medium_attn_pix);
-//    }
-//
-//    int tr = block.thread_rank();
-//    float3 pix_out    = {0.f, 0.f, 0.f};
-//    float3 pix_clr    = {0.f, 0.f, 0.f};
-//    // [修改] 将 pix_medium 拆分为自然后向散射与主动后向散射两路独立累加
-//    float3 pix_natural_bs = {0.f, 0.f, 0.f};  // 自然环境光后向散射
-//    float3 pix_active_bs  = {0.f, 0.f, 0.f};  // 主动点光源后向散射
-//    float pix_depth   = 0.f;
-//
-//    for (int b = 0; b < num_batches; ++b) {
-//        if (__syncthreads_count(done) >= block_size) {
-//            break;
-//        }
-//
-//        int batch_start = range.x + block_size * b;
-//        int idx = batch_start + tr;
-//        if (idx < range.y) {
-//            int32_t g_id = gaussian_ids_sorted[idx];
-//            id_batch[tr] = g_id;
-//            const float2 xy = xys[g_id];
-//            const float opac = opacities[g_id];
-//            xy_opacity_batch[tr] = {xy.x, xy.y, opac};
-//            conic_batch[tr] = conics[g_id];
-//            depth_batch[tr] = depths[g_id];
-//        }
-//
-//        block.sync();
-//
-//        int batch_size = min(block_size, range.y - batch_start);
-//        for (int t = 0; (t < batch_size) && !done; ++t) {
-//            const float3 conic   = conic_batch[t];
-//            const float3 xy_opac = xy_opacity_batch[t];
-//            const float depth    = depth_batch[t];
-//            const float opac     = xy_opac.z;
-//            const float2 delta   = {xy_opac.x - px, xy_opac.y - py};
-//            const float sigma    = 0.5f * (conic.x * delta.x * delta.x +
-//                                           conic.z * delta.y * delta.y) +
-//                                   conic.y * delta.x * delta.y;
-//            const float alpha    = min(0.999f, opac * __expf(-sigma));
-//
-//            if (sigma < 0.f || alpha * __expf(-min_medium_attn_pix * depth) < 1.f / 255.f) {
-//                continue;
-//            }
-//
-//            const float next_T = T * (1.f - alpha);
-//            if (next_T <= 1e-4f) {
-//                done = true;
-//                break;
-//            }
-//
-//            int32_t g = id_batch[t];
-//            const float vis = alpha * T;
-//            const float3 c  = colors[g];
-//
-//            // 单程衰减：exp(-β_attn * z)，供直接信号项与主动后向散射项复用
-//            float3 exp_attn_single;
-//            exp_attn_single.x = __expf(-medium_attn_pix.x * depth);
-//            exp_attn_single.y = __expf(-medium_attn_pix.y * depth);
-//            exp_attn_single.z = __expf(-medium_attn_pix.z * depth);
-//
-//            // 直接信号项
-//            const float3 c_out = {vis * c.x, vis * c.y, vis * c.z};
-//            pix_clr.x += c_out.x;
-//            pix_clr.y += c_out.y;
-//            pix_clr.z += c_out.z;
-//            pix_out.x += exp_attn_single.x * c_out.x;
-//            pix_out.y += exp_attn_single.y * c_out.y;
-//            pix_out.z += exp_attn_single.z * c_out.z;
-//            pix_depth += vis * depth;
-//
-//            if (cur_idx == 0) {
-//                first_idx = batch_start + t;
-//            }
-//
-//            // ----------------------------------------------------------------
-//            // 自然环境光后向散射项（恢复为原始常数 B_inf 形式）
-//            // 对应：B_inf * (exp(-β_bs*prev_z) - exp(-β_bs*z))
-//            // ----------------------------------------------------------------
-//            float3 exp_bs_slab;
-//            exp_bs_slab.x = __expf(-medium_bs_pix.x * prev_depth)
-//                          - __expf(-medium_bs_pix.x * depth);
-//            exp_bs_slab.y = __expf(-medium_bs_pix.y * prev_depth)
-//                          - __expf(-medium_bs_pix.y * depth);
-//            exp_bs_slab.z = __expf(-medium_bs_pix.z * prev_depth)
-//                          - __expf(-medium_bs_pix.z * depth);
-//
-//            pix_natural_bs.x += T * exp_bs_slab.x * medium_rgb_pix.x;
-//            pix_natural_bs.y += T * exp_bs_slab.y * medium_rgb_pix.y;
-//            pix_natural_bs.z += T * exp_bs_slab.z * medium_rgb_pix.z;
-//
-//            // ----------------------------------------------------------------
-//            // [新增] 主动点光源后向散射项（Riemann 逐片段近似）
-//            //
-//            // 物理推导：
-//            //   dB_active = β_bs · [λ/(r²+λ)] · exp(-2β_attn·r) · dr
-//            //
-//            // 片段近似（在当前 slab 右端点 depth 处求值）：
-//            //   ΔB_active ≈ β_bs · [λ/(z²+λ)] · exp(-2β_attn·z) · Δz
-//            //
-//            // exp(-2β_attn·z) = exp_attn_single² （复用上方已算结果）
-//            // ----------------------------------------------------------------
-//            float dz       = depth - prev_depth;
-//            float depth_sq = depth * depth;
-//
-//            float3 active_slab;
-//            active_slab.x = medium_bs_pix.x
-//                          * (medium_omega_pix.x / (depth_sq + medium_omega_pix.x + 1e-7f))
-//                          * exp_attn_single.x * exp_attn_single.x
-//                          * dz;
-//            active_slab.y = medium_bs_pix.y
-//                          * (medium_omega_pix.y / (depth_sq + medium_omega_pix.y + 1e-7f))
-//                          * exp_attn_single.y * exp_attn_single.y
-//                          * dz;
-//            active_slab.z = medium_bs_pix.z
-//                          * (medium_omega_pix.z / (depth_sq + medium_omega_pix.z + 1e-7f))
-//                          * exp_attn_single.z * exp_attn_single.z
-//                          * dz;
-//
-//            pix_active_bs.x += T * active_slab.x;
-//            pix_active_bs.y += T * active_slab.y;
-//            pix_active_bs.z += T * active_slab.z;
-//            // ----------------------------------------------------------------
-//
-//            prev_depth = depth;
-//            T = next_T;
-//            cur_idx = batch_start + t;
-//        }
-//    }
-//
-//    if (inside) {
-//        final_Ts[pix_id]     = T;
-//        final_index[pix_id]  = cur_idx;
-//        first_index[pix_id]  = first_idx;
-//
-//        // ----------------------------------------------------------------
-//        // 背景段自然后向散射（prev_depth 到无穷远）
-//        // 对应原始公式：B_inf * exp(-β_bs * prev_depth)
-//        // ----------------------------------------------------------------
-//        float3 exp_bs_bg;
-//        exp_bs_bg.x = __expf(-medium_bs_pix.x * prev_depth);
-//        exp_bs_bg.y = __expf(-medium_bs_pix.y * prev_depth);
-//        exp_bs_bg.z = __expf(-medium_bs_pix.z * prev_depth);
-//
-//        float3 final_medium;
-//        final_medium.x = pix_natural_bs.x + T * exp_bs_bg.x * medium_rgb_pix.x
-//                       + pix_active_bs.x;   // 背景段主动项置0
-//        final_medium.y = pix_natural_bs.y + T * exp_bs_bg.y * medium_rgb_pix.y
-//                       + pix_active_bs.y;
-//        final_medium.z = pix_natural_bs.z + T * exp_bs_bg.z * medium_rgb_pix.z
-//                       + pix_active_bs.z;
-//
-//        out_img[pix_id]   = pix_out;
-//        out_clr[pix_id]   = pix_clr;
-//        out_med[pix_id]   = final_medium;
-//        depth_im[pix_id]  = pix_depth;
-//    }
-//}
-
-
-//----version1-----
-//__global__ void rasterize_forward(
-//    const dim3 tile_bounds,
-//    const dim3 img_size,
-//    const int32_t* __restrict__ gaussian_ids_sorted,
-//    const int2* __restrict__ tile_bins,
-//    const float2* __restrict__ xys,
-//    const float3* __restrict__ conics,
-//    const float3* __restrict__ colors,
-//    const float* __restrict__ opacities,
-//    const float3* __restrict__ medium_rgb,
-//    const float3* __restrict__ medium_bs,
-//    const float3* __restrict__ medium_attn,
-//    const float3* __restrict__ medium_omega,
-//    const float* __restrict__ depths,
-//    float* __restrict__ final_Ts,
-//    int* __restrict__ final_index,
-//    int* __restrict__ first_index,
-//    float3* __restrict__ out_img,
-//    float3* __restrict__ out_clr,
-//    float3* __restrict__ out_med,
-//    float* __restrict__ depth_im,
-//    const float3& __restrict__ background
-//) {
-//    // each thread draws one pixel, but also timeshares caching gaussians in a
-//    // shared tile
-//
-//    auto block = cg::this_thread_block();
-//    int32_t tile_id =
-//        block.group_index().y * tile_bounds.x + block.group_index().x;
-//    unsigned i =
-//        block.group_index().y * block.group_dim().y + block.thread_index().y;
-//    unsigned j =
-//        block.group_index().x * block.group_dim().x + block.thread_index().x;
-//
-//    float px = (float)j;
-//    float py = (float)i;
-//    int32_t pix_id = i * img_size.x + j;
-//
-//    // return if out of bounds
-//    // keep not rasterizing threads around for reading data
-//    bool inside = (i < img_size.y && j < img_size.x);
-//    bool done = !inside;
-//
-//    // have all threads in tile process the same gaussians in batches
-//    // first collect gaussians between range.x and range.y in batches
-//    // which gaussians to look through in this tile
-//    int2 range = tile_bins[tile_id];
-//    const int block_size = block.size();
-//    int num_batches = (range.y - range.x + block_size - 1) / block_size;
-//
-//    __shared__ int32_t id_batch[MAX_BLOCK_SIZE];
-//    __shared__ float3 xy_opacity_batch[MAX_BLOCK_SIZE];
-//    __shared__ float3 conic_batch[MAX_BLOCK_SIZE];
-//    __shared__ float depth_batch[MAX_BLOCK_SIZE];
-//
-//    // current visibility left to render
-//    float T = 1.f;
-//    // index of most recent gaussian to write to this thread's pixel
-//    int cur_idx = 0;
-//    // index of the first gaussian that contributes to this pixel
-//    int first_idx = 0;
-//
-//    // previous depth of the pixel
-//    float prev_depth = 0.f;
-//
-//    float3 medium_rgb_pix;
-//    float3 medium_bs_pix;
-//    float3 medium_attn_pix;
-//    float3 medium_omega_pix;
-//    float min_medium_attn_pix;
-//    if (inside) {
-//        medium_rgb_pix = medium_rgb[pix_id];
-//        medium_bs_pix = medium_bs[pix_id];
-//        medium_attn_pix = medium_attn[pix_id];
-//        medium_omega_pix = medium_omega[pix_id];
-//        prev_depth = 0.f;
-//        // get the biggest one of medium_attn_pix xyz
-//        min_medium_attn_pix = std::min(medium_attn_pix.x, std::min(medium_attn_pix.y, medium_attn_pix.z));
-//        min_medium_attn_pix = std::min(0.f, min_medium_attn_pix);
-//    }
-//
-//    // collect and process batches of gaussians
-//    // each thread loads one gaussian at a time before rasterizing its
-//    // designated pixel
-//    int tr = block.thread_rank();
-//    float3 pix_out = {0.f, 0.f, 0.f};
-//    float3 pix_clr = {0.f, 0.f, 0.f};
-//    float3 pix_medium = {0.f, 0.f, 0.f};
-//    float pix_depth = 0.f;
-//    for (int b = 0; b < num_batches; ++b) {
-//        // resync all threads before beginning next batch
-//        // end early if entire tile is done
-//        if (__syncthreads_count(done) >= block_size) {
-//            break;
-//        }
-//
-//        // each thread fetch 1 gaussian from front to back
-//        // index of gaussian to load
-//        int batch_start = range.x + block_size * b;
-//        int idx = batch_start + tr;
-//        if (idx < range.y) {
-//            int32_t g_id = gaussian_ids_sorted[idx];
-//            id_batch[tr] = g_id;
-//            const float2 xy = xys[g_id];
-//            const float opac = opacities[g_id];
-//            xy_opacity_batch[tr] = {xy.x, xy.y, opac};
-//            conic_batch[tr] = conics[g_id];
-//            depth_batch[tr] = depths[g_id];
-//        }
-//
-//        // wait for other threads to collect the gaussians in batch
-//        block.sync();
-//
-//        // process gaussians in the current batch for this pixel
-//        int batch_size = min(block_size, range.y - batch_start);
-//        for (int t = 0; (t < batch_size) && !done; ++t) {
-//            const float3 conic = conic_batch[t];
-//            const float3 xy_opac = xy_opacity_batch[t];
-//            const float depth = depth_batch[t];
-//            const float opac = xy_opac.z;
-//            const float2 delta = {xy_opac.x - px, xy_opac.y - py};
-//            const float sigma = 0.5f * (conic.x * delta.x * delta.x +
-//                                        conic.z * delta.y * delta.y) +
-//                                conic.y * delta.x * delta.y;
-//            const float alpha = min(0.999f, opac * __expf(-sigma));
-//
-//            if (sigma < 0.f || alpha * __expf(-min_medium_attn_pix * depth) < 1.f / 255.f) {
-//                continue;
-//            }
-//
-//            const float next_T = T * (1.f - alpha);
-//            if (next_T <= 1e-4f) { // this pixel is done
-//                // we want to render the last gaussian that contributes and note
-//                // that here idx > range.x so we don't underflow
-//                done = true;
-//                break;
-//            }
-//
-//            int32_t g = id_batch[t];
-//            const float vis = alpha * T;
-//            const float3 c = colors[g];
-//            float3 exp_obj;
-//            exp_obj.x = __expf(-medium_attn_pix.x * depth);
-//            exp_obj.y = __expf(-medium_attn_pix.y * depth);
-//            exp_obj.z = __expf(-medium_attn_pix.z * depth);
-//            const float3 c_out = {vis * c.x, vis * c.y, vis * c.z};
-//            pix_clr.x = pix_clr.x + c_out.x;
-//            pix_clr.y = pix_clr.y + c_out.y;
-//            pix_clr.z = pix_clr.z + c_out.z;
-//            pix_out.x = pix_out.x + exp_obj.x * c_out.x;
-//            pix_out.y = pix_out.y + exp_obj.y * c_out.y;
-//            pix_out.z = pix_out.z + exp_obj.z * c_out.z;
-//            pix_depth = pix_depth + vis * depth;
-//            if (cur_idx == 0) {
-//                first_idx = batch_start + t;
-//            }
-//            //更改B组成
-//            float depth_sq = depth * depth;
-//            float3 A_z;
-//            A_z.x = (medium_omega_pix.x / (depth_sq + medium_omega_pix.x + 1e-7f)) * exp_obj.x;
-//            A_z.y = (medium_omega_pix.y / (depth_sq + medium_omega_pix.y + 1e-7f)) * exp_obj.y;
-//            A_z.z = (medium_omega_pix.z / (depth_sq + medium_omega_pix.z + 1e-7f)) * exp_obj.z;
-//            float3 B_inf_new;
-//            B_inf_new.x = (1.0f - medium_rgb_pix.x) * A_z.x + medium_rgb_pix.x;
-//            B_inf_new.y = (1.0f - medium_rgb_pix.y) * A_z.y + medium_rgb_pix.y;
-//            B_inf_new.z = (1.0f - medium_rgb_pix.z) * A_z.z + medium_rgb_pix.z;
-//            //--------
-//
-//            // add medium scattering
-//            float3 exp_bs;
-//            exp_bs.x = __expf(-medium_bs_pix.x * prev_depth) - __expf(-medium_bs_pix.x * depth);
-//            exp_bs.y = __expf(-medium_bs_pix.y * prev_depth) - __expf(-medium_bs_pix.y * depth);
-//            exp_bs.z = __expf(-medium_bs_pix.z * prev_depth) - __expf(-medium_bs_pix.z * depth);
-//
-//            //更改
-//            pix_medium.x = pix_medium.x + T * exp_bs.x * B_inf_new.x;
-//            pix_medium.y = pix_medium.y + T * exp_bs.y * B_inf_new.y;
-//            pix_medium.z = pix_medium.z + T * exp_bs.z * B_inf_new.z;
-//            prev_depth = depth;
-//            T = next_T;
-//            cur_idx = batch_start + t;
-//        }
-//    }
-//
-//    if (inside) {
-//        // add background
-//        final_Ts[pix_id] = T; // transmittance at last gaussian in this pixel
-//        final_index[pix_id] =
-//            cur_idx; // index of in bin of last gaussian in this pixel
-//        first_index[pix_id] = first_idx; // index of first gaussian in this pixel
-//        // float3 final_color;
-//        float3 final_medium;
-//        // add medium scattering
-//
-//        // 针对背景部分计算积分，评估点位于无限远射线的起点(prev_depth)
-//        float bg_depth_sq = prev_depth * prev_depth;
-//        float3 exp_obj_bg;
-//        exp_obj_bg.x = __expf(-medium_attn_pix.x * prev_depth);
-//        exp_obj_bg.y = __expf(-medium_attn_pix.y * prev_depth);
-//        exp_obj_bg.z = __expf(-medium_attn_pix.z * prev_depth);
-//
-//        // [新增] 计算背景处的 A(z)
-//        float3 A_z_bg;
-//        A_z_bg.x = (medium_omega_pix.x / (bg_depth_sq + medium_omega_pix.x + 1e-7f)) * exp_obj_bg.x;
-//        A_z_bg.y = (medium_omega_pix.y / (bg_depth_sq + medium_omega_pix.y + 1e-7f)) * exp_obj_bg.y;
-//        A_z_bg.z = (medium_omega_pix.z / (bg_depth_sq + medium_omega_pix.z + 1e-7f)) * exp_obj_bg.z;
-//
-//        // [新增] 计算背景处的 B_inf_new(z)
-//        float3 B_inf_new_bg;
-//        B_inf_new_bg.x = (1.0f - medium_rgb_pix.x) * A_z_bg.x + medium_rgb_pix.x;
-//        B_inf_new_bg.y = (1.0f - medium_rgb_pix.y) * A_z_bg.y + medium_rgb_pix.y;
-//        B_inf_new_bg.z = (1.0f - medium_rgb_pix.z) * A_z_bg.z + medium_rgb_pix.z;
-//
-//        float3 exp_bs;
-//        // const float depth = 10.f;
-//        exp_bs.x = __expf(-medium_bs_pix.x * prev_depth);
-//        exp_bs.y = __expf(-medium_bs_pix.y * prev_depth);
-//        exp_bs.z = __expf(-medium_bs_pix.z * prev_depth);
-//
-//        //修改
-//        final_medium.x = pix_medium.x + T * exp_bs.x * B_inf_new_bg.x;
-//        final_medium.y = pix_medium.y + T * exp_bs.y * B_inf_new_bg.y;
-//        final_medium.z = pix_medium.z + T * exp_bs.z * B_inf_new_bg.z;
-//
-//        out_img[pix_id] = pix_out;
-//        out_clr[pix_id] = pix_clr;
-//        out_med[pix_id] = final_medium;
-//        depth_im[pix_id] = pix_depth;
-//    }
-//}
-
-// device helper to approximate projected 2d cov from 3d mean and cov
 __device__ void project_cov3d_ewa(
     const float3& __restrict__ mean3d,
     const float* __restrict__ cov3d,
@@ -1073,15 +601,11 @@ __device__ void project_cov3d_ewa(
 __device__ void scale_rot_to_cov3d(
     const float3 scale, const float glob_scale, const float4 quat, float *cov3d
 ) {
-    // printf("quat %.2f %.2f %.2f %.2f\n", quat.x, quat.y, quat.z, quat.w);
     glm::mat3 R = quat_to_rotmat(quat);
-    // printf("R %.2f %.2f %.2f\n", R[0][0], R[1][1], R[2][2]);
     glm::mat3 S = scale_to_mat(scale, glob_scale);
-    // printf("S %.2f %.2f %.2f\n", S[0][0], S[1][1], S[2][2]);
 
     glm::mat3 M = R * S;
     glm::mat3 tmp = M * glm::transpose(M);
-    // printf("tmp %.2f %.2f %.2f\n", tmp[0][0], tmp[1][1], tmp[2][2]);
 
     // save upper right because symmetric
     cov3d[0] = tmp[0][0];

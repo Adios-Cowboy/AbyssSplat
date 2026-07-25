@@ -7,7 +7,7 @@ import sys
 from setuptools import find_packages, setup
 
 __version__ = None
-exec(open("abyss_splat/version.py", "r").read())
+exec(open("abysssplat/version.py", "r").read())
 
 BUILD_NO_CUDA = os.getenv("BUILD_NO_CUDA", "0") == "1"
 WITH_SYMBOLS = os.getenv("WITH_SYMBOLS", "0") == "1"
@@ -25,7 +25,7 @@ def get_extensions():
     from torch.__config__ import parallel_info
     from torch.utils.cpp_extension import CUDAExtension
 
-    extensions_dir = osp.join("abyss_splat", "cuda", "csrc")
+    extensions_dir = osp.join("abysssplat", "cuda", "csrc")
     sources = glob.glob(osp.join(extensions_dir, "*.cu")) + glob.glob(
         osp.join(extensions_dir, "*.cpp")
     )
@@ -34,7 +34,7 @@ def get_extensions():
     undef_macros = []
     define_macros = []
     if sys.platform == "win32":
-        define_macros.append(("abyss_splat_EXPORTS", None))
+        define_macros.append(("abysssplat_EXPORTS", None))
 
     extra_compile_args = {"cxx": ["-O3"]}
     if os.name != "nt":
@@ -71,7 +71,7 @@ def get_extensions():
 
     return [
         CUDAExtension(
-            "abyss_splat.csrc",
+            "abysssplat.csrc",
             sources,
             include_dirs=[osp.join(extensions_dir, "third_party", "glm")],
             define_macros=define_macros,

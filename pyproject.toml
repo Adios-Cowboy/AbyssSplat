@@ -24,10 +24,10 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["abyss_splat*"]
+include = ["abysssplat*"]
 
 [tool.pyright]
-include = ["abyss_splat"]
+include = ["abysssplat"]
 exclude = ["**/__pycache__"]
 reportMissingImports = false
 reportMissingTypeStubs = false
@@ -40,4 +40,4 @@ select = ["E", "F", "PLC", "PLE", "PLR", "PLW"]
 ignore = ["E501", "F722", "F821", "PLR0913", "PLR2004"]
 
 [project.entry-points.'nerfstudio.method_configs']
-abysssplat = "abyss_splat.abyss_splat_config:abyss_splat_method"
+abysssplat = "abysssplat.abysssplat_config:abysssplat_method"
