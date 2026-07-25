@@ -5,6 +5,10 @@ ACM Multimedia 2026 (accepted)
 
 > Code release for the paper is being prepared. Paper and project-page links will be added after publication.
 
+<p align="center">
+  <img src="assets/overview.png" alt="AbyssSplat overview" width="100%" />
+</p>
+
 AbyssSplat is a 3D Gaussian Splatting framework for reconstructing underwater scenes captured under complex deep-sea illumination. It explicitly models the non-uniform contribution of a co-axial active light source and uses medium-aware geometric confidence to prevent medium noise from driving unnecessary Gaussian densification.
 
 ## Highlights
@@ -16,7 +20,7 @@ AbyssSplat is a 3D Gaussian Splatting framework for reconstructing underwater sc
 
 ## Installation
 
-The environment follows WaterSplatting: Python 3.8, CUDA 11.8, PyTorch 2.1.2, and Nerfstudio 1.1.4.
+AbyssSplat requires Python 3.8, CUDA 11.8, PyTorch 2.1.2, and Nerfstudio 1.1.4.
 
 ```bash
 conda create -n abyss_splat python=3.8 -y
