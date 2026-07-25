@@ -1,0 +1,43 @@
+[project]
+name = "abysssplat"
+version = "0.1.0"
+description = "Active-illumination-aware Gaussian splatting for deep-sea 3D reconstruction"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = ["3dgs", "underwater", "deep-sea", "gaussian splatting", "cuda"]
+dependencies = [
+    "nerfstudio==1.1.4",
+    "jaxtyping",
+    "rich>=12",
+    "torch",
+    "typing_extensions; python_version < '3.8'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "pyright",
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+include = ["abyss_splat*"]
+
+[tool.pyright]
+include = ["abyss_splat"]
+exclude = ["**/__pycache__"]
+reportMissingImports = false
+reportMissingTypeStubs = false
+reportPrivateImportUsage = false
+pythonVersion = "3.8"
+pythonPlatform = "Linux"
+
+[tool.ruff]
+select = ["E", "F", "PLC", "PLE", "PLR", "PLW"]
+ignore = ["E501", "F722", "F821", "PLR0913", "PLR2004"]
+
+[project.entry-points.'nerfstudio.method_configs']
+abysssplat = "abyss_splat.abyss_splat_config:abyss_splat_method"

@@ -1,0 +1,32 @@
+# Python and packaging
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+*.egg-info/
+build/
+dist/
+
+# Native builds
+*.o
+*.a
+*.lib
+*.dll
+*.exp
+
+# Experiment artifacts and data
+outputs/
+renders/
+data/
+checkpoints/
+wandb/
+*.ckpt
+*.ply
+*.mp4
+*.mov
+
+# Local configuration and editor files
+.env
+.vscode/
+.idea/
+.DS_Store
