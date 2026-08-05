@@ -220,7 +220,6 @@ __global__ void rasterize_backward_kernel(
     float3 latter_exp_bs = {0.f, 0.f, 0.f};
     bool has_latter = false;
 
-    // 光线级局部寄存器，提升至循环外部以保证全视线积分连续性
     float3 v_medium_rgb_ray   = {0.f, 0.f, 0.f};
     float3 v_medium_bs_ray    = {0.f, 0.f, 0.f};
     float3 v_medium_attn_ray  = {0.f, 0.f, 0.f};
@@ -315,7 +314,6 @@ __global__ void rasterize_backward_kernel(
                     active_seg.y = medium_omega_pix.y * geom_atten_seg * exp_active_seg.y * delta_z_seg;
                     active_seg.z = medium_omega_pix.z * geom_atten_seg * exp_active_seg.z * delta_z_seg;
 
-                    // 剥离 warpSum，光线域内标量累加
                     v_medium_omega_ray.x += v_out_med.x * T * geom_atten_seg * exp_active_seg.x * delta_z_seg;
                     v_medium_omega_ray.y += v_out_med.y * T * geom_atten_seg * exp_active_seg.y * delta_z_seg;
                     v_medium_omega_ray.z += v_out_med.z * T * geom_atten_seg * exp_active_seg.z * delta_z_seg;
@@ -397,7 +395,6 @@ __global__ void rasterize_backward_kernel(
                 v_opacity_local = vis * v_alpha;
             }
 
-            // 高斯基元空间参数仍维持 warpSum
             warpSum3(v_rgb_local, warp);
             warpSum3(v_conic_local, warp);
             warpSum2(v_xy_local, warp);
@@ -433,7 +430,6 @@ __global__ void rasterize_backward_kernel(
 
     block.sync();
 
-    // 尾部区域介质特征计算
     if (inside) {
         float3 exp_bs = {1.f, 1.f, 1.f};
         T = 1.f;
@@ -469,7 +465,6 @@ __global__ void rasterize_backward_kernel(
             v_medium_attn_ray.z += v_out_med.z * medium_omega_pix.z * geom_atten_tail * (-2.0f * z_mid_tail) * exp_active_tail.z * delta_z_tail;
         }
 
-        // 光线积分结束后，单次解耦写回全局显存
         float* v_medium_rgb_ptr = (float*)(v_medium_rgb);
         atomicAdd(v_medium_rgb_ptr + 3*pix_id + 0, v_medium_rgb_ray.x);
         atomicAdd(v_medium_rgb_ptr + 3*pix_id + 1, v_medium_rgb_ray.y);

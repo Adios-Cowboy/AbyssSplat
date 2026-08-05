@@ -91,7 +91,7 @@ class AbyssSplatModelConfig(ModelConfig):
     _target: Type = field(default_factory=lambda: AbyssSplatModel)
     num_steps: int = 15000
     """Number of steps to train the model"""
-    warmup_length: int = 600 #################
+    warmup_length: int = 600
     """period of steps where refinement is turned off"""
     refine_every: int = 100
     """period of steps where gaussians are culled and densified"""
@@ -120,7 +120,7 @@ class AbyssSplatModelConfig(ModelConfig):
     densify_grad_thresh: float = 0.0004
     # densify_grad_thresh: float = 0.0008
     """threshold of positional gradient norm for densifying gaussians (0.0004, 0.0008)"""
-    densify_size_thresh: float = 0.001     ######################## 0.001
+    densify_size_thresh: float = 0.001
     """below this size, gaussians are *duplicated*, otherwise split"""
     n_split_samples: int = 2
     """number of samples to split gaussians into"""
@@ -140,8 +140,10 @@ class AbyssSplatModelConfig(ModelConfig):
     """Number of gaussians to initialize if random init is used"""
     random_scale: float = 10.
     "Size of the cube to initialize random gaussians within"
-    ssim_lambda: float = 0.2
+    l1_loss_weight: float = 0.7
+    ssim_loss_weight: float = 0.15
     """weight of ssim loss"""
+    lpips_loss_weight: float = 0.15
     main_loss: Literal["l1", "reg_l1", "reg_l2"] = "reg_l1"
     """main loss to use"""
     ssim_loss: Literal["reg_ssim", "ssim"] = "reg_ssim"
@@ -169,95 +171,13 @@ class AbyssSplatModelConfig(ModelConfig):
     mlp_type: Literal["tcnn", "torch"] = "tcnn"
     """Type of MLP to use for medium MLP."""
 
-    # _target: Type = field(default_factory=lambda: WaterSplattingModel)
-    # num_steps: int = 15000
-    # """Number of steps to train the model"""
-    # warmup_length: int = 500
-    # """period of steps where refinement is turned off"""
-    # refine_every: int = 100
-    # """period of steps where gaussians are culled and densified"""
-    # resolution_schedule: int = 3000
-    # """training starts at 1/d resolution, every n steps this is doubled"""
-    # background_color: Literal["random", "black", "white"] = "black"
-    # """Whether to randomize the background color."""
-    # num_downscales: int = 2
-    # """at the beginning, resolution is 1/2^d, where d is this number"""
-    # cull_alpha_thresh: float = 0.5
-    # """threshold of opacity for culling gaussians. One can set it to a lower value (e.g. 0.005) for higher quality."""
-    # cull_alpha_thresh_post: float = 0.1
-    # """threshold of opacity for post culling gaussians"""
-    # reset_alpha_thresh: float = 0.5
-    # """threshold of opacity for resetting alpha"""
-    # cull_scale_thresh: float = 10.
-    # """threshold of scale for culling huge gaussians"""
-    # continue_cull_post_densification: bool = True
-    # """If True, continue to cull gaussians post refinement"""
-    # zero_medium: bool = False
-    # """If True, zero out the medium field"""
-    # reset_alpha_every: int = 5
-    # """Every this many refinement steps, reset the alpha"""
-    # abs_grad_densification: bool = True
-    # """If True, use absolute gradient for densification"""
-    # densify_grad_thresh: float = 0.0004
-    # # densify_grad_thresh: float = 0.0008
-    # """threshold of positional gradient norm for densifying gaussians (0.0004, 0.0008)"""
-    # densify_size_thresh: float = 0.0005
-    # """below this size, gaussians are *duplicated*, otherwise split"""
-    # n_split_samples: int = 2
-    # """number of samples to split gaussians into"""
-    # sh_degree_interval: int = 1000
-    # """every n intervals turn on another sh degree"""
-    # clip_thresh: float = 0.01
-    # """minimum depth threshold"""
-    # cull_screen_size: float = 0.15
-    # """if a gaussian is more than this percent of screen space, cull it"""
-    # split_screen_size: float = 0.05
-    # """if a gaussian is more than this percent of screen space, split it"""
-    # stop_screen_size_at: int = 0
-    # """stop culling/splitting at this step WRT screen size of gaussians"""
-    # random_init: bool = False
-    # """whether to initialize the positions uniformly randomly (not SFM points)"""
-    # num_random: int = 50000
-    # """Number of gaussians to initialize if random init is used"""
-    # random_scale: float = 10.
-    # "Size of the cube to initialize random gaussians within"
-    # ssim_lambda: float = 0.1
-    # """weight of ssim loss"""
-    # main_loss: Literal["l1", "reg_l1", "reg_l2"] = "reg_l1"
-    # """main loss to use"""
-    # ssim_loss: Literal["reg_ssim", "ssim"] = "reg_ssim"
-    # """ssim loss to use"""
-    # stop_split_at: int = 10000
-    # """stop splitting at this step"""
-    # sh_degree: int = 3
-    # """maximum degree of spherical harmonics to use"""
-    # rasterize_mode: Literal["classic", "antialiased"] = "classic"
-    # """
-    # Classic mode of rendering will use the EWA volume splatting with a [0.3, 0.3] screen space blurring kernel. This
-    # approach is however not suitable to render tiny gaussians at higher or lower resolution than the captured, which
-    # results "aliasing-like" artifacts. The antialiased mode overcomes this limitation by calculating compensation factors
-    # and apply them to the opacities of gaussians to preserve the total integrated density of splats.
-    #
-    # However, PLY exported with antialiased rasterize mode is not compatible with classic mode. Thus many web viewers that
-    # were implemented for classic mode can not render antialiased mode PLY properly without modifications.
-    # """
-    # num_layers_medium: int = 3
-    # """Number of hidden layers for medium MLP."""
-    # hidden_dim_medium: int = 64
-    # """Dimension of hidden layers for medium MLP."""
-    # medium_density_bias: float = 0.0
-    # """Bias for medium density (sigma_bs and sigma_attn)."""
-    # mlp_type: Literal["tcnn", "torch"] = "tcnn"
-    # """Type of MLP to use for medium MLP."""
-
-
 class AbyssSplatModel(Model):
     """
     Args:
         config: AbyssSplat configuration to instantiate model
     """
 
-    config: WaterSplattingModelConfig
+    config: AbyssSplatModelConfig
 
     def __init__(
         self,
@@ -269,15 +189,25 @@ class AbyssSplatModel(Model):
         super().__init__(*args, **kwargs)
 
     def populate_modules(self):
+        loss_weights = (
+            self.config.l1_loss_weight,
+            self.config.ssim_loss_weight,
+            self.config.lpips_loss_weight,
+        )
+        if any(weight < 0.0 for weight in loss_weights):
+            raise ValueError("Loss weights must be non-negative.")
+        if not math.isclose(sum(loss_weights), 1.0, rel_tol=0.0, abs_tol=1e-6):
+            raise ValueError("L1, SSIM, and LPIPS loss weights must sum to 1.0.")
+
         # initialize the medium MLP
         self.direction_encoding = SHEncoding(levels=4, implementation="tcnn")
         self.colour_activation = nn.Sigmoid()
         self.sigma_activation = nn.Softplus()
 
         # medium MLP
-        num_layers_medium=self.config.num_layers_medium,
-        hidden_dim_medium=self.config.hidden_dim_medium,
-        self.medium_density_bias=self.config.medium_density_bias,
+        num_layers_medium = self.config.num_layers_medium
+        hidden_dim_medium = self.config.hidden_dim_medium
+        self.medium_density_bias = self.config.medium_density_bias
         # if type is tuple, then [0]
         num_layers_medium = num_layers_medium if isinstance(num_layers_medium, int) else num_layers_medium[0]
         hidden_dim_medium = hidden_dim_medium if isinstance(hidden_dim_medium, int) else hidden_dim_medium[0]
@@ -295,7 +225,7 @@ class AbyssSplatModel(Model):
                 implementation=self.config.mlp_type,
             )
         else:
-            self.medium_mlp = nn.Linear(self.direction_encoding.get_out_dim(), 9)
+            self.medium_mlp = nn.Linear(self.direction_encoding.get_out_dim(), 12)
             self.config.mlp_type = "torch"
 
         if self.seed_points is not None and not self.config.random_init:
@@ -404,14 +334,6 @@ class AbyssSplatModel(Model):
     @property
     def opacities(self):
         return self.gauss_params["opacities"]
-
-    @property
-    def medium_mlp(self):
-        return self.gauss_params["medium_mlp"]
-
-    @property
-    def direction_encoding(self):
-        return self.gauss_params["direction_encoding"]
 
     def load_state_dict(self, dict, **kwargs):  # type: ignore
         # resize the parameters to match the new number of points
@@ -1119,8 +1041,16 @@ class AbyssSplatModel(Model):
         # else:
         #     simloss = 1 - self.ssim(gt_img.permute(2, 0, 1)[None, ...], pred_img.permute(2, 0, 1)[None, ...])
 
-        simloss = 1 - self.ssim_fn((gt_img / (pred_img.detach() + 1e-3)).permute(2, 0, 1)[None, ...],
-                                   (pred_img / (pred_img.detach() + 1e-3)).permute(2, 0, 1)[None, ...])
+        if self.config.ssim_loss == "reg_ssim":
+            simloss = 1 - self.ssim(
+                (gt_img / (pred_img.detach() + 1e-3)).permute(2, 0, 1)[None, ...],
+                (pred_img / (pred_img.detach() + 1e-3)).permute(2, 0, 1)[None, ...],
+            )
+        else:
+            simloss = 1 - self.ssim(
+                gt_img.permute(2, 0, 1)[None, ...],
+                pred_img.permute(2, 0, 1)[None, ...],
+            )
 
 
         lpips_loss = (
@@ -1141,9 +1071,9 @@ class AbyssSplatModel(Model):
             # "main_loss": 0.7 * recon_loss
             #              + 0.2 * simloss
             #                 + 0.2 * lpips_loss
-            "main_loss": (1 - self.config.ssim_lambda) * recon_loss
-                         + self.config.ssim_lambda * simloss
-                         + 0.2 * lpips_loss
+            "main_loss": self.config.l1_loss_weight * recon_loss
+                         + self.config.ssim_loss_weight * simloss
+                         + self.config.lpips_loss_weight * lpips_loss
             # "main_loss": (1 - self.config.ssim_lambda) * recon_loss + self.config.ssim_lambda * simloss
         }
 
