@@ -335,6 +335,14 @@ class AbyssSplatModel(Model):
     def opacities(self):
         return self.gauss_params["opacities"]
 
+    @property
+    def medium_mlp(self):
+        return self.gauss_params["medium_mlp"]
+
+    @property
+    def direction_encoding(self):
+        return self.gauss_params["direction_encoding"]
+
     def load_state_dict(self, dict, **kwargs):  # type: ignore
         # resize the parameters to match the new number of points
         self.step = self.config.num_steps
