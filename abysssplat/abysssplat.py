@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This file has been modified for the AbyssSplat project, 2026.
+
 """
 Python package for combining 3DGS with volume rendering to enable water/fog modeling.
 """
